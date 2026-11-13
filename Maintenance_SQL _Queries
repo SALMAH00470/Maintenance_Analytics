@@ -1,0 +1,164 @@
+ 
+ -- THE SCENARIO: I AM A DATA ANALYST IN A MANUFACTURING PLANT,THE PLANT MANAGER SAYS UNPLANNED BREAKDOWNS ARE COSTING US PRODUCTION TIME,
+ -- TELL ME THE FAILURE COST AND THE SOLUTION.
+ 
+ 
+ SELECT * FROM `predictive maintenance dataset`
+ LIMIT 20;
+ 
+ 
+ -- BUSINESS PROBLEMS
+ -- PROBLEM 1. HOW BIG IS THE FAILURE PROBLEM?Out of everything we produce, how often do machines fail, 
+ -- and does the product quality type make a difference
+ -- Q1.  OVERALL FAILURE RATE
+ 
+ SELECT
+ COUNT(*) as total_records,
+ SUM(`machine failure`) as total_failures,
+ ROUND(SUM(`machine failure`) * 100.0 / COUNT(*), 2) AS failure_rate_pct
+ from `predictive maintenance dataset`;
+ 
+ -- Q2 FAILURE RATE BY PRODUCT TYPE
+  SELECT
+  type,
+  COUNT(*) AS total_records,
+  sum(`machine failure`) as total_failure,
+  ROUND(SUM(`MACHINE FAILURE`)* 100 / COUNT(*), 2) AS failure_rate_pct
+  FROM `predictive maintenance dataset`
+GROUP BY type
+ORDER BY failure_rate_pct DESC;
+
+-- PROBLEM 2: WHICH FAILURE TYPE HAPPENS THE MOST? THIS ANSWERS WHERE THE MAINTENACE BUDGET GOES FIRST
+  
+ WITH failure_modes AS (
+    SELECT 'TWF' AS failure_type, SUM(TWF) AS failure_count FROM `predictive maintenance dataset`
+    UNION ALL SELECT 'HDF', SUM(HDF) FROM `predictive maintenance dataset`
+    UNION ALL SELECT 'PWF', SUM(PWF) FROM `predictive maintenance dataset`
+    UNION ALL SELECT 'OSF', SUM(OSF) FROM `predictive maintenance dataset`
+    UNION ALL SELECT 'RNF', SUM(RNF) FROM `predictive maintenance dataset`
+)
+SELECT
+    failure_type,
+    failure_count,
+    ROUND(100.0 * failure_count / (SELECT SUM(`Machine failure`) FROM `predictive maintenance dataset`), 1) AS pct_of_failures
+FROM failure_modes
+ORDER BY failure_count DESC;
+ 
+ 
+ -- PROBLEM 3: DOES TOOL WEAR DRIVES BREAKDOWN? what this question means is does machine with more tool wear develop faults quickly
+ 
+ SELECT 
+ `machine failure`,
+ COUNT(*) AS total_records,
+ ROUND(AVG(`tool wear [MIN]`),2) AS avg_tool_wear,
+ MIN(`tool wear [MIN]`) AS min_tool_wear,
+ MAX(`tool wear [MIN]`) AS max_tool_wear
+ FROM `predictive maintenance dataset`
+ GROUP BY `machine failure`;
+ 
+ -- failure rate by wear band
+ SELECT
+ CASE 
+ WHEN `tool wear [min]` < 50 THEN '1. 0-49'
+ WHEN `tool wear [min]` < 100 THEN '2. 50-99'
+ WHEN `tool wear [min]` < 0 THEN   '3. 100-149'
+ WHEN `tool wear [min]` < 50 THEN '4. 500-199'
+ ELSE '5. 200+'
+ END AS wear_band,
+ COUNT(*) AS total_rows,
+ SUM(`machine failure`) AS failures,
+ ROUND(100.0 * SUM(`machine failure`) / COUNT(*), 2) AS failure_rate_PCT
+ FROM `predictive maintenance dataset`
+ GROUP BY wear_band
+ ORDER BY wear_band;
+ 
+ -- PROBLEM 4:  What operating conditions are risky?
+ -- compare failed vs not failed machines
+ SELECT
+ `machine failure`,
+ COUNT(*) AS total_rows,
+ROUND(AVG(`air temperature [K]`), 2) as avg_air_temp,
+ROUND(AVG(`process temperature [K]`), 2) as avg_process_temp,
+ROUND(AVG(`rotational speed [rpm]`), 2) as avg_rpm,
+ROUND(AVG(`torque [Nm]`), 2) as avg_torque
+FROM `predictive maintenance dataset`
+GROUP BY `machine failure`;
+
+-- failure cost
+
+CREATE TABLE failure_cost_assumptions (
+  failure_type VARCHAR(5),
+  downtime_hrs DECIMAL(5,2),
+  repair_cost DECIMAL(10,2)
+);
+-- Example values only: replace with plant estimates
+INSERT INTO failure_cost_assumptions VALUES
+('TWF', 1.0, 200), ('HDF', 4.0, 1500), ('PWF', 3.0, 1200),
+('OSF', 6.0, 2500), ('RNF', 2.0, 500);
+
+SELECT
+  f.failure_type,
+  f.failure_count,
+  c.downtime_hrs,
+  f.failure_count * (c.downtime_hrs * 2000 + c.repair_cost) AS est_total_cost  -- 2000 = lost production per hour (assumption)
+FROM (
+  SELECT 'TWF' AS failure_type, SUM(TWF) AS failure_count FROM `predictive maintenance dataset`
+  UNION ALL SELECT 'HDF', SUM(HDF) FROM `predictive maintenance dataset`
+  UNION ALL SELECT 'PWF', SUM(PWF) FROM `predictive maintenance dataset`
+  UNION ALL SELECT 'OSF', SUM(OSF) FROM `predictive maintenance dataset`
+  UNION ALL SELECT 'RNF', SUM(RNF) FROM `predictive maintenance dataset`
+) f
+JOIN failure_cost_assumptions c USING (failure_type)
+ORDER BY est_total_cost DESC;
+
+-- The failure rate by torque band
+
+SELECT
+CASE
+WHEN `torque [Nm]` < 20 THEN '1.under 20'
+WHEN `torque [Nm]` < 40 THEN '2.under 20-39'
+WHEN `torque [Nm]` < 50 THEN '3.under 40-49'
+WHEN `torque [Nm]` < 60 THEN '4.under 50-59'
+ELSE '5.60+'
+END AS torque_band,
+COUNT(*) AS total_rows,
+SUM(`machine failure`) AS failures,
+  ROUND(100.0 * SUM(`machine failure`) / COUNT(*), 2) AS failure_rate_pct
+FROM `predictive maintenance dataset`
+GROUP BY torque_band
+ORDER BY torque_band;
+
+
+
+
+
+
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
